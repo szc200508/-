@@ -9,25 +9,28 @@ plt.rcParams['axes.unicode_minus'] = False
 
 # 网页标题
 st.title("☕ 校园咖啡馆投资决策与敏感性模拟器")
-st.markdown("欢迎来到课堂互动环节！请在下方调整参数，观察 **NPV（净现值）** 的实时变化：")
+st.markdown("欢迎来到课堂互动环节！请在左侧调整参数，观察 **NPV（净现值）** 及底层计算逻辑的实时变化：")
 
 # ==========================================
-# 1. 侧边栏：让同学在手机/电脑上自由拖动滑块调整参数
+# 1. 侧边栏：参数调节滑块
 # ==========================================
 st.sidebar.header("🎛️ 调整项目参数")
 
-inv = st.sidebar.slider("初始投资额 (万元)", 50.0, 200.0, 100.0, 5.0)
+inv = st.sidebar.slider("初始投资额 (万元)", 50.0, 200.0, 95.0, 5.0)
 vol = st.sidebar.slider("销售量 (万杯/年)", 10.0, 50.0, 25.0, 1.0)
 pri = st.sidebar.slider("产品单价 (元/杯)", 5.0, 20.0, 10.0, 0.5)
-var_c = st.sidebar.slider("单位变动成本 (元/杯)", 1.0, 10.0, 5.0, 0.5)
+var_c = st.sidebar.slider("单位变动成本 (元/杯)", 1.0, 10.0, 6.0, 0.5)
 fix_c = st.sidebar.slider("每年固定成本/房租 (万元)", 1.0, 20.0, 4.0, 1.0)
 rate = st.sidebar.slider("折现率 (%)", 1.0, 25.0, 10.0, 0.5) / 100.0
 
 # ==========================================
 # 2. 核心计算
 # ==========================================
-ocf = (vol * pri - vol * var_c) - fix_c
-npv = -inv + ocf / (1 + rate)
+revenue = vol * pri
+total_var_cost = vol * var_c
+ocf = revenue - total_var_cost - fix_c
+discount_factor = (1 + rate) ** 1
+npv = -inv + ocf / discount_factor
 
 # 主页面展示大指标
 col1, col2 = st.columns(2)
@@ -37,21 +40,33 @@ if npv > 0:
 else:
     col2.metric("净现值 (NPV)", f"{npv:.2f} 万元", delta="亏损（请拒绝）", delta_color="inverse")
 
-st.markdown("---")
+# ==========================================
+# 3. 新增：实时推导与计算过程展示（教学神器）
+# ==========================================
+with st.expander("📝 点击查看：底层财务推理与详细计算步骤", expanded=True):
+    st.markdown("**第一步：计算营业现金流 (OCF)**")
+    st.markdown(f"- **总收入** = 销量 × 单价 = {vol} 万杯 × {pri} 元 = **{revenue:.2f} 万元**")
+    st.markdown(f"- **总变动成本** = 销量 × 单位变动成本 = {vol} 万杯 × {var_c} 元 = **{total_var_cost:.2f} 万元**")
+    st.markdown(f"- **营业现金流 (OCF)** = 总收入 - 总变动成本 - 固定成本 = {revenue:.2f} - {total_var_cost:.2f} - {fix_c} = **{ocf:.2f} 万元**")
+
+    st.markdown("---")
+    st.markdown("**第二步：计算净现值 (NPV)**")
+    st.markdown(f"- **现金流折现** = 营业现金流 / (1 + 折现率)^1 = {ocf:.2f} / (1 + {rate}) = **{ocf/discount_factor:.2f} 万元**")
+    st.markdown(f"- **净现值 (NPV)** = - 初始投资 + 折现现金流 = -{inv} + {ocf/discount_factor:.2f} = **{npv:.2f} 万元**")
 
 # ==========================================
-# 3. 动态绘制图表
+# 4. 动态绘制图表
 # ==========================================
 st.subheader("📊 实时敏感性分析驾驶舱")
 
 fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
 # 左图：单变量模拟
-test_labels = ['单价降9%', '固定成本涨150%', '销量降20%']
+test_labels = ['销量缩减 20%', '固定成本大涨 150%', '单价微降 9%']
 test_npvs = [
-    -inv + ((vol * (pri*0.91) - vol * var_c) - fix_c) / (1 + rate),
-    -inv + ((vol * pri - vol * var_c) - fix_c*2.5) / (1 + rate),
-    -inv + (((vol*0.8) * pri - (vol*0.8) * var_c) - fix_c) / (1 + rate)
+    -inv + (((vol*0.8) * pri - (vol*0.8) * var_c) - fix_c) / discount_factor,
+    -inv + ((vol * pri - vol * var_c) - fix_c*2.5) / discount_factor,
+    -inv + ((vol * (pri*0.91) - vol * var_c) - fix_c) / discount_factor
 ]
 colors = ['red' if x < 0 else 'green' for x in test_npvs]
 axes[0].barh(test_labels, test_npvs, color=colors, alpha=0.8)
@@ -66,7 +81,7 @@ matrix_data = np.zeros((len(volumes), len(prices)))
 for i, v_val in enumerate(volumes):
     for j, p_val in enumerate(prices):
         c_val = (v_val * p_val - v_val * var_c) - fix_c
-        matrix_data[i, j] = -inv + c_val / (1 + rate)
+        matrix_data[i, j] = -inv + c_val / discount_factor
 
 sns.heatmap(matrix_data, annot=True, fmt=".1f", cmap="RdYlGn",
             xticklabels=prices, yticklabels=volumes, ax=axes[1], cbar=False)
